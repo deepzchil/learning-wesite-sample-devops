@@ -16,7 +16,7 @@ jobs:
     steps:
       # Checkout repo
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # Optional: Verify files (good for debugging)
       - name: List files
