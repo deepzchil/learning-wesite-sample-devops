@@ -10,6 +10,7 @@ env:
   AZURE_WEBAPP_PACKAGE_PATH: .
   NODE_VERSION: '20'
   MANAGER_EMAIL: indradeep.ch12@gmail.com
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
 
@@ -22,7 +23,7 @@ jobs:
     steps:
       # Download source code from GitHub repo
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # Install Node.js (optional for JS projects)
       - name: Setup Node.js
