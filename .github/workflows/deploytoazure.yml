@@ -1,4 +1,4 @@
-name: Deploy Static Website to Azure Web App
+name: CI/CD Deploy Static Website to Azure with Manager Approval
 
 on:
   push:
@@ -6,26 +6,121 @@ on:
       - main
 
 env:
-  AZURE_WEBAPP_NAME: 'dnmgithubactions'
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  
+  AZURE_WEBAPP_NAME: dnmgithubactions
+  AZURE_WEBAPP_PACKAGE_PATH: .
+  NODE_VERSION: '20'
+  MANAGER_EMAIL: indradeep.ch12@gmail.com
+
 jobs:
-  build-and-deploy:
+
+# -------------------------------------------------
+# JOB 1 - BUILD WEBSITE
+# -------------------------------------------------
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout repo
-      - name: Checkout code
-        uses: actions/checkout@v5
+      # Download source code from GitHub repo
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      # Optional: Verify files (good for debugging)
-      - name: List files
-        run: ls -R
+      # Install Node.js (optional for JS projects)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
-      # Deploy directly (no build needed)
+      # Validate required files exist
+      - name: Check Files
+        run: |
+          echo "Checking website files..."
+          test -f index.html
+          test -f style.css
+          test -f script.js
+          echo "All files found."
+
+      # Create deployment package
+      - name: Archive Website Files
+        run: zip -r release.zip ./*
+
+      # Upload build artifact
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-build
+          path: release.zip
+
+# -------------------------------------------------
+# JOB 2 - SEND EMAIL TO MANAGER
+# -------------------------------------------------
+  send-approval-mail:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send Approval Email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          secure: false
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: Approval Required for Azure Production Deployment
+          to: ${{ env.MANAGER_EMAIL }}
+          from: ${{ secrets.MAIL_USERNAME }}
+          body: |
+            Hello Manager,
+
+            Build completed successfully.
+
+            Please approve deployment in GitHub:
+
+            Repo → Actions → Workflow Run → Review Deployments
+
+            Regards,
+            DevOps Pipeline
+
+# -------------------------------------------------
+# JOB 3 - MANAGER APPROVAL
+# -------------------------------------------------
+  approval:
+    needs: send-approval-mail
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://dnmgithubactions.azurewebsites.net
+
+    steps:
+      - name: Waiting for Manager Approval
+        run: echo "Deployment waiting for approval..."
+
+# -------------------------------------------------
+# JOB 4 - DEPLOY TO AZURE
+# -------------------------------------------------
+  deploy:
+    needs: approval
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: website-build
+
+      - name: Unzip Artifact
+        run: unzip release.zip
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: .
+
+      - name: Deployment Success
+        run: echo "Website deployed successfully to Azure Production"
